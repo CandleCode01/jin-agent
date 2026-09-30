@@ -1,0 +1,20 @@
+name: jin-workbench
+repo: https://github.com/sxuff/jin-workbench
+sha: f07fb5c90e24c1a396604758feb0fd4ae077760b
+description: The Jin desktop app in your browser. `jin workbench` serves the desktop interface through the Jin dashboard, for headless servers, VPSes and tablets. Disclosure — community plugin, not a CandleCode product. On the first `jin workbench` run and again after each Jin update it runs `npm install --ignore-scripts` (guided by Jin's lockfile) and Vite against your Jin checkout's desktop sources, writing only under ~/.jin/jin-workbench and its own plugin dir (the checkout is only read), and starts `jin dashboard` on loopback when none is running.
+maintainer: sxuff
+tier: community
+category: desktop
+requires_jin: ">=0.21"
+docs_url: https://github.com/sxuff/jin-workbench#readme
+version: "0.2.1"
+image: https://raw.githubusercontent.com/sxuff/jin-workbench/f07fb5c90e24c1a396604758feb0fd4ae077760b/docs/media/banner.png
+screenshots:
+  - https://raw.githubusercontent.com/sxuff/jin-workbench/f07fb5c90e24c1a396604758feb0fd4ae077760b/docs/media/session.png
+  - https://raw.githubusercontent.com/sxuff/jin-workbench/f07fb5c90e24c1a396604758feb0fd4ae077760b/docs/media/slash-commands.png
+  - https://raw.githubusercontent.com/sxuff/jin-workbench/f07fb5c90e24c1a396604758feb0fd4ae077760b/docs/media/model-picker.png
+capabilities:
+  provides_tools: []
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []

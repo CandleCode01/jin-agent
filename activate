@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# ============================================================================
+# venv-style activation for the Jin dev environment (pm-managed tools).
+#
+#   source ./activate      (bash / zsh, repo root)
+#   .\activate.ps1         (PowerShell)
+#
+# Emits the composed pm env (PATH + tool vars) into the CURRENT shell, with
+# save/restore: `deactivate` undoes exactly what activation changed.
+#
+# `jin` becomes a shell function for this checkout. It runs only while the
+# shell is inside this worktree and refuses outside it, so a sibling worktree
+# keeps its own command. A prompt prefix names the worktree.
+#
+# Sync through setup before selecting the environment. PM owns freshness;
+# activation does not maintain a second dependency stamp. It trusts the
+# recorded tool digest instead of re-hashing every entry. `jin pm
+# install` and `jin update` keep that check.
+# ============================================================================
+_JIN_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Options: `--test-extras a,b` selects the test environment's runtime extras
+# (default: [all]); `--` ends options.
+# A bare `source ./activate` inherits the caller's positional parameters.
+# Ignore unrelated words so scripts with their own arguments can source it.
+_jin_test_env="--test-environment"
+_jin_expect_extras=""
+for _jin_arg in "$@"; do
+    if [ -n "$_jin_expect_extras" ]; then
+        _jin_test_env="--test-environment=$_jin_arg"
+        _jin_expect_extras=""
+        continue
+    fi
+    case "$_jin_arg" in
+        --) break ;;
+        --test-extras) _jin_expect_extras=1 ;;
+        --test-extras=*) _jin_test_env="--test-environment=${_jin_arg#--test-extras=}" ;;
+        *) : ;;
+    esac
+done
+if [ -n "$_jin_expect_extras" ]; then
+    printf '%s\n' 'activate: --test-extras needs a comma-separated list' >&2
+    unset _jin_arg _jin_test_env _jin_expect_extras
+    return 2 2>/dev/null || exit 2
+fi
+# Setup runs in a child: failures must not exit or partially activate the
+# caller's shell, and activation must not republish launchers or shell config.
+if ! (
+    unset PYTHONHOME PYTHONPATH VIRTUAL_ENV
+    bash "$_JIN_REPO/setup-jin.sh" --runtime-only "$_jin_test_env"
+) >&2; then
+    printf '%s\n' 'activate: setup failed; shell environment unchanged' >&2
+    unset _jin_arg _jin_test_env _jin_expect_extras
+    return 1 2>/dev/null || exit 1
+fi
+unset _jin_arg _jin_test_env _jin_expect_extras
+
+# Guard against double-sourcing: venv activate precedent (re-activating is a
+# no-op re-save; we keep it idempotent by deactivating first). Key on the
+# function, not the sentinel: child shells inherit __JIN_ACTIVATED from an
+# activated parent but never the function, and there is nothing to undo there.
+if [ "$(type -t deactivate 2>/dev/null)" = "function" ]; then
+    deactivate
+fi
+
+# Bootstrap Python only emits the environment; it does not install anything.
+_jin_repo="$_JIN_REPO"
+_jin_py=""
+for _jin_candidate in "$_jin_repo/.venv/bin/python" "$_jin_repo/.venv/Scripts/python.exe" \
+                         "$_jin_repo/venv/bin/python" "$_jin_repo/venv/Scripts/python.exe"; do
+    [ -x "$_jin_candidate" ] && { _jin_py="$_jin_candidate"; break; }
+done
+if [ -z "$_jin_py" ]; then
+    for _jin_store in "${JIN_RUNTIME_DIR:-}" "$_jin_repo/../tools" "${JIN_HOME:-$HOME/.jin}/tools"; do
+        [ -n "$_jin_store" ] || continue
+        for _jin_candidate in "$_jin_store"/python-*/bin/python3 "$_jin_store"/python-*/python.exe "$_jin_store"/python-*/bin/python "$_jin_store"/python-*/bin/python.exe; do
+            [ -x "$_jin_candidate" ] && { _jin_py="$_jin_candidate"; break; }
+        done
+        [ -n "$_jin_py" ] && break
+    done
+fi
+if [ -z "$_jin_py" ]; then
+    echo "activate: no bootstrap Python found; run setup-jin.sh" >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+# --- emit export lines from `pm env` ---
+_jin_json="$(PYTHONHOME= PYTHONPATH="$_jin_repo" "$_jin_py" -m pm.environments)"
+if [ -z "$_jin_json" ] || [ "${_jin_json#*{}" = "$_jin_json" ]; then
+    echo "activate: could not read pm env (run ./setup-jin.sh first)" >&2
+    unset _jin_repo _jin_os _jin_arch _jin_target _jin_store _jin_py _jin_json
+    return 1 2>/dev/null || exit 1
+fi
+
+_jin_keys="$(printf '%s' "$_jin_json" | "$_jin_py" -c 'import json,sys; print(" ".join(json.load(sys.stdin)))' \
+    | tr ' ' '\n' | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' | tr '\n' ' ')"
+[ -n "$_jin_keys" ] || _jin_keys="PATH"
+
+# --- snapshot what we are about to change (deactivate restores this) ---
+# __JIN_ACTIVATED is part of the composed env below (it carries the
+# installed-state path this environment was built from), so it is snapshotted
+# and exported with every other key — no separate assignment here.
+__JIN_SAVED_PATH="$PATH"
+for _jin_k in $_jin_keys; do
+    eval "__JIN_SAVED_$_jin_k=\"\${$_jin_k+set}\""
+    eval "__JIN_PRIOR_$_jin_k=\${$_jin_k-__JIN_UNSET__}"
+done
+
+# Resolved before the export below replaces PATH.
+_jin_cygpath="$(command -v cygpath 2>/dev/null || :)"
+
+eval "$(printf '%s' "$_jin_json" | "$_jin_py" -c '
+import json, sys, shlex, re
+for k, v in json.load(sys.stdin).items():
+    # Windows carries names like ProgramFiles(ARM) that are not valid
+    # bash identifiers — skip them (they pass through untouched).
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k):
+        continue
+    print("export %s=%s" % (k, shlex.quote(str(v))))')"
+
+# The MSYS/Cygwin runtime hands a native Windows Python these variables in
+# Windows form (`C:\a;C:\b`) and converts them back only for its own children.
+# Exported verbatim, bash splits PATH on ':' and finds no commands.
+if [ -n "$_jin_cygpath" ]; then
+    PATH="$("$_jin_cygpath" -u -p "$PATH")"
+    for _jin_k in HOME TMPDIR TMP TEMP; do
+        if [ -n "${!_jin_k-}" ]; then
+            printf -v "$_jin_k" '%s' "$("$_jin_cygpath" -u "${!_jin_k}")"
+        fi
+    done
+fi
+
+# This checkout, not whichever `jin` PATH finds. A function beats PATH, an
+# alias, and a hashed command, including the MSIX execution alias.
+__JIN_WORKTREE="$_jin_repo"
+# The branch names the worktree. A checkout cannot share a branch with another.
+__JIN_WORKTREE_NAME="$(git -C "$_jin_repo" rev-parse --abbrev-ref HEAD 2>/dev/null || :)"
+if [ -z "$__JIN_WORKTREE_NAME" ] || [ "$__JIN_WORKTREE_NAME" = HEAD ]; then
+    __JIN_WORKTREE_NAME="$(basename "$_jin_repo")"
+fi
+__JIN_SAVED_PS1="${PS1-__JIN_UNSET__}"
+__JIN_SAVED_PROMPT_COMMAND="${PROMPT_COMMAND-__JIN_UNSET__}"
+
+_jin_worktree_here() {
+    _jin_top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+    [ "$(cd "$_jin_top" && pwd -P)" = "$(cd "$__JIN_WORKTREE" && pwd -P)" ]
+}
+
+jin() {
+    _jin_worktree_here || {
+        printf '%s\n' "jin: $(pwd) is outside $__JIN_WORKTREE; refusing (the installed command is hidden while this checkout is active)" >&2
+        return 1
+    }
+    (
+        cd "$__JIN_WORKTREE" || exit 1
+        if [ -n "${PYTHON-}" ]; then
+            exec "$PYTHON" jin "$@"
+        elif [ -x .venv/Scripts/python.exe ]; then
+            exec .venv/Scripts/python.exe jin "$@"
+        elif [ -x .venv/bin/python ]; then
+            exec .venv/bin/python jin "$@"
+        elif [ -x venv/Scripts/python.exe ]; then
+            exec venv/Scripts/python.exe jin "$@"
+        elif [ -x venv/bin/python ]; then
+            exec venv/bin/python jin "$@"
+        else
+            exec python jin "$@"
+        fi
+    )
+}
+
+_jin_prompt() {
+    if [ "$__JIN_SAVED_PS1" = "__JIN_UNSET__" ]; then
+        _jin_base_ps1=""
+    else
+        _jin_base_ps1="$__JIN_SAVED_PS1"
+    fi
+    if _jin_worktree_here; then
+        PS1="($__JIN_WORKTREE_NAME) $_jin_base_ps1"
+    else
+        PS1="$_jin_base_ps1"
+    fi
+}
+
+if [ -n "${PROMPT_COMMAND-}" ]; then
+    PROMPT_COMMAND="_jin_prompt; ${PROMPT_COMMAND}"
+else
+    PROMPT_COMMAND=_jin_prompt
+fi
+_jin_prompt
+
+deactivate() {
+    export PATH="$__JIN_SAVED_PATH"
+    for _jin_k in $__JIN_KEY_LIST; do
+        eval "_jin_was=\"\$__JIN_SAVED_$_jin_k\""
+        eval "_jin_old=\"\$__JIN_PRIOR_$_jin_k\""
+        if [ "$_jin_was" != "set" ]; then
+            unset "$_jin_k"
+        else
+            export "$_jin_k=$_jin_old"
+        fi
+        unset "__JIN_SAVED_$_jin_k" "__JIN_PRIOR_$_jin_k"
+    done
+    if [ "$__JIN_SAVED_PS1" = "__JIN_UNSET__" ]; then
+        unset PS1
+    else
+        PS1="$__JIN_SAVED_PS1"
+    fi
+    if [ "$__JIN_SAVED_PROMPT_COMMAND" = "__JIN_UNSET__" ]; then
+        unset PROMPT_COMMAND
+    else
+        PROMPT_COMMAND="$__JIN_SAVED_PROMPT_COMMAND"
+    fi
+    unset __JIN_SAVED_PATH __JIN_KEY_LIST __JIN_ACTIVATED \
+          __JIN_WORKTREE __JIN_WORKTREE_NAME \
+          __JIN_SAVED_PS1 __JIN_SAVED_PROMPT_COMMAND
+    unset -f deactivate jin _jin_worktree_here _jin_prompt
+    unset _jin_k _jin_was _jin_old _jin_top
+}
+
+# remember the key list for deactivate (kept out of the loop vars above)
+__JIN_KEY_LIST="$_jin_keys"
+
+unset _jin_repo _jin_os _jin_arch _jin_target _jin_store \
+      _jin_py _jin_json _jin_keys _jin_k _jin_entry _jin_venvpy \
+      _jin_winarch _jin_top _jin_cygpath

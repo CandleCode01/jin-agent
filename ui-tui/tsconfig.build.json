@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@jin/ink": ["src/types/jin-ink.d.ts"]
+    }
+  }
+}

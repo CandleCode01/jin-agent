@@ -1,0 +1,17 @@
+name: gitjin
+repo: https://github.com/claudiumio/gitjin
+sha: 09d5b566da650290dc0d639ea1e77def4bcdab31
+description: GitHub PRs and issues as a right workspace pane in Jin Desktop, via the connected gh CLI. Disclosure — shells out to your logged-in gh CLI; the in-pane update pill only runs `jin plugins update gitjin` (no fetch-and-replace) and currently compares against upstream main rather than the pinned sha.
+maintainer: claudiumio
+tier: community
+category: desktop
+requires_jin: ">=0.21.1"
+docs_url: https://github.com/claudiumio/gitjin#readme
+version: "0.5.0"
+image: https://raw.githubusercontent.com/claudiumio/gitjin/09d5b566da650290dc0d639ea1e77def4bcdab31/docs/social-preview.png
+platforms: []
+capabilities:
+  provides_tools: []
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []
