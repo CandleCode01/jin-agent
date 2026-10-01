@@ -136,8 +136,8 @@ const DEFAULT_VALUES: Record<'mac' | 'windows', Record<Appearance, TranslucencyV
     dark: { intensity: 29, fade: 0, material: 'titlebar', scope: DEFAULT_GLASS_SCOPE }
   },
   windows: {
-    light: { intensity: 29, fade: 0, material: 'under-window', scope: DEFAULT_GLASS_SCOPE },
-    dark: { intensity: 29, fade: 0, material: 'under-window', scope: DEFAULT_GLASS_SCOPE }
+    light: { intensity: 0, fade: 0, material: 'under-window', scope: DEFAULT_GLASS_SCOPE },
+    dark: { intensity: 0, fade: 0, material: 'under-window', scope: DEFAULT_GLASS_SCOPE }
   }
 }
 
