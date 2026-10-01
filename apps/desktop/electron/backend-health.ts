@@ -4,7 +4,7 @@
 // and re-drives boot, which cascades into minutes of "not connected" and
 // orphaned python processes (#63454). The poll returns the moment the backend
 // responds, so fast machines see no change; 180s is deliberately generous.
-export const DEFAULT_BACKEND_READY_TIMEOUT_MS = 180_000
+export const DEFAULT_BACKEND_READY_TIMEOUT_MS = 900_000
 export const DEFAULT_BACKEND_READY_POLL_MS = 500
 // A cold backend can stall its event loop for tens of seconds while Windows
 // scans and byte-compiles the gateway import tree. At the default 15s socket

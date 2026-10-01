@@ -10,7 +10,7 @@
 // electron/backend-health.ts: the renderer must out-wait the main process
 // cold-boot budget, or it flips to "not connected" and re-drives boot while
 // main is still mid-wait (#63454).
-export const BACKEND_BOOT_WAIT_TIMEOUT_MS = 180_000
+export const BACKEND_BOOT_WAIT_TIMEOUT_MS = 900_000
 
 // desktop.getConnection() / getConnectionFor() / revalidateConnection() /
 // resolveGatewayWsUrl() are IPC round-trips into the main process with no
