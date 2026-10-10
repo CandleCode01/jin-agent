@@ -176,6 +176,14 @@ export function Intro({ personality, seed }: IntroProps) {
       <div className="w-full min-w-0">
         <IntroMascot className="mb-2" />
 
+        <p className="m-0 text-center text-sm font-medium leading-normal text-foreground">
+          Dev Tariq Saeed
+        </p>
+
+        <p className="mb-3 mt-0 text-center text-xs leading-normal">
+          WhatsApp 00923117071991
+        </p>
+
         <p className="m-0 text-center leading-normal tracking-tight">{body}</p>
       </div>
     </div>

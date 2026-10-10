@@ -6722,6 +6722,26 @@ function registerPowerResumeListeners() {
   }
 }
 
+// JIN_TASKBAR_ICON_FIX_V1
+// Apply Jin's icon and Windows App ID to every Electron window.
+if (IS_WINDOWS) {
+  app.on('browser-window-created', (_event, win) => {
+    const jinIcon = getAppIconPath()
+    if (!jinIcon) return
+
+    try {
+      win.setIcon(jinIcon)
+      win.setAppDetails({
+        appId: IDENTITY_APP_NAME ? PRODUCT_IDENTITY.appId : 'com.candlecode.jin',
+        appIconPath: jinIcon,
+        appIconIndex: 0
+      })
+    } catch (error) {
+      console.warn('[jin] Taskbar icon setup failed:', error)
+    }
+  })
+}
+
 function getAppIconPath() {
   // Fail-soft: skip candidates that exist but don't decode (truncated PNG in a
   // packaged app.asar previously crashed createWindow mid-session). Missing
@@ -14922,6 +14942,16 @@ function createWindow() {
     // session-windows.ts and stream-throttle.ts.
     webPreferences: chatWindowWebPreferences(PRELOAD_PATH)
   })
+
+  if (IS_WINDOWS && icon) {
+    mainWindow.setIcon(icon)
+
+    mainWindow.setAppDetails({
+      appId: IDENTITY_APP_NAME ? PRODUCT_IDENTITY.appId : 'com.candlecode.jin',
+      appIconPath: icon,
+      appIconIndex: 0
+    })
+  }
 
   const createdMainWindow = mainWindow
   minimizeToTray.registerWindow(createdMainWindow, { closeToTray: true })
